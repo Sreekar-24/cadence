@@ -1,5 +1,5 @@
 // Cadence service worker: the app shell is cached for offline use; your data lives in IndexedDB, not here.
-const CACHE = 'cadence-e8d3df34f1';
+const CACHE = 'cadence-74391c3cd0';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
