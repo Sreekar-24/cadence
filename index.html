@@ -306,6 +306,7 @@ p{margin:0}
 .wd .pip{width:22px;height:4px;border-radius:4px;background:var(--c,var(--surface-3))}
 .wd.on{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
 .wd.on b{color:var(--on-primary)}
+.wd.now:not(.on){box-shadow:inset 0 0 0 2px var(--primary)}
 .ex{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:14px 0;border-top:1px solid var(--line)}
 .ex:first-child{border-top:0}
 .ex .name{font-weight:700}
@@ -872,9 +873,10 @@ let __now = null;
 const now = () => (__now != null ? __now : Date.now());
 const setNow = v => { __now = v; };
 
-/* ----- dates: a "date" is a local YYYY-MM-DD string. The app day starts at 04:00, so a
-   Shift B wind-down after midnight still belongs to the evening it started on. ----- */
-const DAY_START = 4 * 60;
+/* ----- dates: a "date" is a local YYYY-MM-DD string. The app day may run past midnight until the
+   cut-off in Settings (dayEnd(), 00:00–04:00), so a Shift B wind-down still belongs to the evening it
+   started on. Dates and times shown to the user follow the real clock (realToday). ----- */
+const DAY_END_MAX = 4 * 60;
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -893,12 +895,16 @@ const isoWeekOf = s => {
 };
 const weekKey = s => { const w = isoWeekOf(s); return `${w.year}-W${pad(w.week)}`; };
 const minsNow = () => { const d = new Date(now()); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; };
-// the app's "today": before 04:00 it is still yesterday
-const today = () => { const d = new Date(now()); if (d.getHours() * 60 + d.getMinutes() < DAY_START) d.setDate(d.getDate() - 1); return ymd(d); };
+// the plan day being lived: before the cut-off it is still yesterday's
+const today = () => { const d = new Date(now()); if (d.getHours() * 60 + d.getMinutes() < dayEnd()) d.setDate(d.getDate() - 1); return ymd(d); };
+const realToday = () => ymd(new Date(now()));
+const lateNight = () => today() !== realToday();
 // minutes since the start of the app day's calendar date (can exceed 1440 after midnight)
-const dayMins = () => { const m = minsNow(); return m < DAY_START ? m + 1440 : m; };
+const dayMins = () => { const m = minsNow(); return m < dayEnd() ? m + 1440 : m; };
 const fmtDate = (s, o = {}) => { const d = parseYmd(s); return `${o.noDow ? '' : DOW[isoDow(s)] + ' '}${d.getDate()} ${MON[d.getMonth()]}${o.year ? ' ' + d.getFullYear() : ''}`; };
-const relDay = s => { const n = daysBetween(today(), s); return n === 0 ? 'Today' : n === -1 ? 'Yesterday' : n === 1 ? 'Tomorrow' : fmtDate(s); };
+const relDay = s => { const n = daysBetween(realToday(), s); return n === 0 ? 'Today' : n === -1 ? 'Yesterday' : n === 1 ? 'Tomorrow' : fmtDate(s); };
+// after midnight yesterday's plan is still open: say so instead of calling it "Yesterday"
+const dayLabel = s => (s === today() && lateNight() ? `${DOW[isoDow(s)]}'s plan · open until ${hm(dayEnd())}` : relDay(s));
 const fmtWhen = ts => { if (!ts) return 'never'; const d = new Date(ts), s = ymd(d); return `${relDay(s)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const fmtBytes = n => (n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB');
 
@@ -1203,10 +1209,12 @@ async function mergeRecords(recs) {
 const DEFAULT_SETTINGS = {
   pattern: 'alternate', anchor: '2026-10-05', anchorShift: 'A', rota: 'AAB',
   nudges: true, bkRemind: true, bkKey: false, guide: false, planTip: true,
-  ai: false, aiUrl: '', aiModel: '', lastBackupAt: 0, created: 0,
+  ai: false, aiUrl: '', aiModel: '', lastBackupAt: 0, created: 0, dayEnd: DAY_END_MAX,
 };
 const S = () => ({ ...DEFAULT_SETTINGS, ...val('set', 'main') });
 const setS = patch => put('set', 'main', patch);
+const DAY_END_OPTS = [0, 60, 120, 180, 240];
+const dayEnd = () => { const v = val('set', 'main').dayEnd; return DAY_END_OPTS.includes(v) ? v : DAY_END_MAX; };
 
 /* ---- 03-plan.js ---- */
 /* ===== Plan: the routine as data. Every edit saves a new version; each day remembers which
@@ -1969,7 +1977,7 @@ function renderToday() {
   }
 
   $('#s-today').innerHTML = `
-  <div class="head rise" style="--i:0"><div><h1>${esc(title)}</h1><p>${fmtDate(date)} · ${esc(shName)}${info.work ? ' · ' + workSpan(info) : ''}</p></div>
+  <div class="head rise" style="--i:0"><div><h1>${esc(title)}</h1><p>${isToday && lateNight() ? `${fmtDate(realToday())} · ${DOW[isoDow(date)]}'s plan open until ${hm(dayEnd())}` : fmtDate(date)} · ${esc(shName)}${info.work ? ' · ' + workSpan(info) : ''}</p></div>
     ${st ? `<span class="chip c d-train">${I('flame', 's')}${st}-day streak</span>` : ''}</div>
   <div class="daynav rise" style="--i:0">
     <button class="iconbtn" data-act="dayNav" data-v="-1" aria-label="Previous day">${I('chevron-left')}</button>
@@ -2081,10 +2089,10 @@ function renderTrain() {
   const tips = w.ex.map(x => [x, overloadTip(x, date)]).filter(p => p[1]);
   const plan = planFor(date), wk = isoWeekOf(date).week;
   $('#s-train').innerHTML = `
-  <div class="head rise" style="--i:0"><div><h1>Train</h1><p>${relDay(date)} · week ${wk} · ${done}/${w.total} sets</p></div>
+  <div class="head rise" style="--i:0"><div><h1>Train</h1><p>${dayLabel(date)} · week ${wk} · ${done}/${w.total} sets</p></div>
     <span class="chip c d-train">${I('trophy', 's')}${prev.sessions}/${prev.plannedSessions} last week</span></div>
   <div class="weekstrip rise" style="--i:1">
-    ${Array.from({ length: 7 }, (_, i) => { const d = addDays(mon, i), x = workoutFor(d); return `<button class="wd d-${okDom(x.dom)} ${d === date ? 'on' : ''} ${trained(d) ? 'did' : ''}" data-act="trainDay" data-v="${d}">${DOW[i]}<b>${parseYmd(d).getDate()}</b><span class="pip"></span></button>`; }).join('')}
+    ${Array.from({ length: 7 }, (_, i) => { const d = addDays(mon, i), x = workoutFor(d); return `<button class="wd d-${okDom(x.dom)} ${d === date ? 'on' : ''} ${d === realToday() ? 'now' : ''} ${trained(d) ? 'did' : ''}" data-act="trainDay" data-v="${d}">${DOW[i]}<b>${parseYmd(d).getDate()}</b><span class="pip"></span></button>`; }).join('')}
   </div>
   <div class="row between rise" style="--i:1;margin-top:8px"><button class="iconbtn" data-act="trainWeek" data-v="-7" aria-label="Previous week">${I('chevron-left')}</button>
     ${date !== today() ? `<button class="chip c d-train" data-act="trainDay" data-v="${today()}">${I('rotate-ccw', 's')}Today</button>` : '<span class="muted small">Pick a day to preview or log it</span>'}
@@ -2169,7 +2177,7 @@ function renderEat() {
   const swapsOf = name => (plan.swaps || {})[name];
 
   $('#s-eat').innerHTML = `
-  <div class="head rise" style="--i:0"><div><h1>Eat</h1><p>${relDay(date)} · target ${tg.protein[0]}–${tg.protein[1]} g protein · ~${fmtN(tg.kcal)} kcal</p></div></div>
+  <div class="head rise" style="--i:0"><div><h1>Eat</h1><p>${dayLabel(date)} · target ${tg.protein[0]}–${tg.protein[1]} g protein · ~${fmtN(tg.kcal)} kcal</p></div></div>
   <div class="macro rise" style="--i:1">
     <div class="card d-fuel"><small>Protein so far</small><div class="num cnt">${P}<small> g</small></div>
       <div class="band"><span class="zone" style="left:${tg.protein[0] / pMax * 100}%;width:${(tg.protein[1] - tg.protein[0]) / pMax * 100}%"></span><span class="fill" data-w="${Math.min(P / pMax * 100, 100)}"></span></div>
@@ -2180,7 +2188,7 @@ function renderEat() {
   </div>
   ${GN(`<b>Bands, not exact numbers.</b> Protein has a target zone (the shaded part); calories show a maintenance marker. Planned day: <b>${n.planned.p} g · ${fmtN(n.planned.k)} kcal</b>. Adjust portions in the plan if your waist goes up.`)}
 
-  <div class="sec-title"><h2>${relDay(date) === 'Today' ? 'Today’s' : esc(relDay(date)) + '’s'} meals</h2><span class="muted small">${n.mealsDone}/${n.meals} eaten · ${n.planned.p} g planned</span></div>
+  <div class="sec-title"><h2>${date === today() ? 'Today’s' : esc(relDay(date)) + '’s'} meals</h2><span class="muted small">${n.mealsDone}/${n.meals} eaten · ${n.planned.p} g planned</span></div>
   <div class="card rise" style="--i:2">
     ${info.meals.map(m => { const p = m.items.reduce((a, f) => a + f[1], 0), k = m.items.reduce((a, f) => a + f[2], 0), d = dv['done:' + m.id];
       return `<div class="meal d-fuel ${d ? 'done' : ''}"><div class="meal-h"><span class="tl-ico">${I(m.icon, 's')}</span>
@@ -2237,8 +2245,8 @@ const scoreLv = s => (s == null ? '' : s >= 0.75 ? 'l3' : s >= 0.4 ? 'l2' : 'l1'
 const pctTxt = v => (v == null ? '–' : Math.round(v * 100) + '%');
 
 function renderPlan() {
-  const v = UI.planView, td = today(), plan = normPlan(curPlan()), mon = mondayOf(td), s = S();
-  const thisSh = weekShift(td), nextSh = weekShift(addDays(mon, 7)), tdD = parseYmd(td);
+  const v = UI.planView, td = today(), rd = realToday(), plan = normPlan(curPlan()), mon = mondayOf(td), s = S();
+  const thisSh = weekShift(td), nextSh = weekShift(addDays(mon, 7)), tdD = parseYmd(rd);
   let body = '';
   if (v === 'week') {
     body = `
@@ -2253,10 +2261,10 @@ function renderPlan() {
     <div class="card tight list rise" style="--i:3">
       ${DOW.map((_, i) => { const d = addDays(mon, i), info = dayInfo(d), w = info.workout, prep = info.blocks.find(b => /prep/.test(b.id));
         const wb = info.blocks.find(b => b.dom === 'work');
-        return `<button class="li" data-act="day" data-v="${d}"><span class="badge d-${okDom(w.dom)}">${I(w.icon, 's')}</span><div class="grow"><b>${fmtDate(d)} · ${esc(w.name)}</b><small>${info.work ? `Shift ${info.sh} · ${hm(wb ? wb.s : 0)}–${hm(wb ? wb.e : 0)}` : 'Off'}${prep ? ' · ' + esc(prep.title) : ''}</small></div>${d === td ? '<span class="chip">Today</span>' : I('chevron-right', 's faint')}</button>`; }).join('')}
+        return `<button class="li" data-act="day" data-v="${d}"><span class="badge d-${okDom(w.dom)}">${I(w.icon, 's')}</span><div class="grow"><b>${fmtDate(d)} · ${esc(w.name)}</b><small>${info.work ? `Shift ${info.sh} · ${hm(wb ? wb.s : 0)}–${hm(wb ? wb.e : 0)}` : 'Off'}${prep ? ' · ' + esc(prep.title) : ''}</small></div>${d === rd ? '<span class="chip">Today</span>' : I('chevron-right', 's faint')}</button>`; }).join('')}
     </div>`;
   } else if (v === 'month') {
-    const ym = UI.calMonth || td.slice(0, 7), [y, mo] = ym.split('-').map(Number), first = `${ym}-01`, start = mondayOf(first);
+    const ym = UI.calMonth || rd.slice(0, 7), [y, mo] = ym.split('-').map(Number), first = `${ym}-01`, start = mondayOf(first);
     const daysIn = new Date(y, mo, 0).getDate(), rowsN = Math.ceil((isoDow(first) + daysIn) / 7);
     let cells = DOW.map(d => `<span class="dow">${d[0]}</span>`).join('');
     const past = [];
@@ -2264,7 +2272,7 @@ function renderPlan() {
       const d = addDays(start, i), out = d.slice(0, 7) !== ym, L = dayLetter(d), info = dayInfo(d), st = d <= td ? dayStats(d) : null;
       if (!out && st && st.score != null) past.push(st);
       const prep = info.blocks.some(b => /prep/.test(b.id));
-      cells += `<button class="cday ${out ? 'out' : ''} ${d === td ? 'today' : ''} ${L === 'OFF' ? 'off' : ''} ${st ? scoreLv(st.score) : ''}" data-act="day" data-v="${d}" aria-label="${fmtDate(d)} ${L}"><span>${parseYmd(d).getDate()}</span><span class="sh">${L}</span><span class="pips"><i class="d-${okDom(info.workout.dom)} ${st && st.trained ? 'on' : ''}"></i>${prep ? '<i class="d-prep"></i>' : ''}</span></button>`;
+      cells += `<button class="cday ${out ? 'out' : ''} ${d === rd ? 'today' : ''} ${L === 'OFF' ? 'off' : ''} ${st ? scoreLv(st.score) : ''}" data-act="day" data-v="${d}" aria-label="${fmtDate(d)} ${L}"><span>${parseYmd(d).getDate()}</span><span class="sh">${L}</span><span class="pips"><i class="d-${okDom(info.workout.dom)} ${st && st.trained ? 'on' : ''}"></i>${prep ? '<i class="d-prep"></i>' : ''}</span></button>`;
     }
     const followed = past.filter(x => x.score >= 0.6).length, sessions = past.filter(x => x.trained).length;
     const prevM = mo === 1 ? `${y - 1}-12` : `${y}-${pad(mo - 1)}`, nextM = mo === 12 ? `${y + 1}-01` : `${y}-${pad(mo + 1)}`;
@@ -2335,7 +2343,7 @@ function openDay(date) {
   const dv = val('day', date), wk = weekKey(date), wov = val('week', wk).shift || '', ov = dv.override || '', st = date <= today() ? dayStats(date) : null;
   const seg = (act, cur, opts) => `<div class="seg">${opts.map(([v, l]) => `<button data-act="${act}" data-v="${v}" class="${cur === v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const auto = isOffDay(date) && !ov ? 'off by plan' : `Shift ${patternShift(date)} by pattern`;
-  openGen(fmtDate(date, { year: true }), `${relDay(date)} · now ${dayLetter(date) === 'OFF' ? 'a day off' : 'Shift ' + dayLetter(date)}`, `
+  openGen(fmtDate(date, { year: true }), `${dayLabel(date)} · now ${dayLetter(date) === 'OFF' ? 'a day off' : 'Shift ' + dayLetter(date)}`, `
     ${st && st.score != null ? `<div class="kpis" style="margin-bottom:12px"><div class="card tight kpi"><small>Plan done</small><div class="num">${pctTxt(st.score)}</div></div><div class="card tight kpi"><small>Protein</small><div class="num">${st.p} g</div></div><div class="card tight kpi"><small>Sleep</small><div class="num">${st.sleep ? st.sleep.h + ' h' : '–'}</div></div></div>` : ''}
     <div class="field"><label>This day</label>${seg('setOverride', ov, [['', 'Auto'], ['A', 'Shift A'], ['B', 'Shift B'], ['OFF', 'Off']])}<small class="muted">Auto = ${auto}. Use Off for a holiday or sick day.</small></div>
     <div class="field" style="margin-top:12px"><label>Whole week ${isoWeekOf(date).week}</label>${seg('setWeekShift', wov, [['', 'Pattern'], ['A', 'Shift A'], ['B', 'Shift B']])}<small class="muted">Pattern = Shift ${patternShift(date)} this week. The pattern carries on as normal the week after.</small></div>
@@ -2391,7 +2399,7 @@ const planFromSel = () => ($('#planFrom .on')?.dataset.v === 'today' ? today() :
 function commitPlan(p) {
   const note = ($('#planNote')?.value || 'Plan updated').trim(), from = planFromSel();
   const n = savePlan(p, note, from);
-  closeSheets(); toast(`Saved plan v${n}, starts ${relDay(from).toLowerCase()}`, 'git-branch'); confetti(18);
+  closeSheets(); toast(`Saved plan v${n}, starts ${from === today() ? 'today' : relDay(from).toLowerCase()}`, 'git-branch'); confetti(18);
   render();
 }
 
@@ -2657,6 +2665,10 @@ function renderSettings() {
     <button class="btn ghost block" style="margin-top:10px" data-act="addBlock">${I('plus', 's')}Add a block</button>
   </div>${GN('<b>Editing a block saves a new plan version from today.</b> Days you’ve already ticked something on keep following along; earlier days keep the times they had. Meal blocks move their meal time too.')}</div>
 
+  <div class="set-group rise" style="--i:3"><h3>Late nights</h3><div class="card">
+    <div class="field" style="margin-top:0"><label>Count the hours after midnight as the day before, until</label><div class="seg">${DAY_END_OPTS.map(v => `<button data-act="setDayEnd" data-v="${v}" class="${dayEnd() === v ? 'on' : ''}">${v ? hm(v) : 'Off'}</button>`).join('')}</div></div>
+  </div>${GN(`<b>Dates and times always follow your phone's clock.</b> ${dayEnd() ? `Until ${hm(dayEnd())}, yesterday's plan stays open so a late wind-down or a meal after midnight still counts for the evening it belongs to.` : 'Off: the new day starts at midnight.'}`)}</div>
+
   <div class="set-group rise" style="--i:3"><h3>Targets</h3><div class="card flush">
     ${tStep('p0', 'Protein, lower', 5, ' g', 0)}${tStep('p1', 'Protein, upper', 5, ' g', 1)}${tStep('kcal', 'Calories', 50, '', 2)}${tStep('water', 'Water', 0.25, ' L', 3)}${tStep('sleep', 'Sleep', 0.25, ' h', 4)}
   </div>${tgChanged ? `<div class="grid2" style="margin-top:10px"><button class="btn ghost" data-act="tgReset">Cancel</button><button class="btn primary" data-act="tgSave">${I('check', 's')}Save targets</button></div>` : ''}</div>
@@ -2735,7 +2747,7 @@ function saveBlockEdit(del) {
     else if (u.idx == null) arr.push(nb);
     else arr[u.idx] = nb;
     // order by start within the app day (after-midnight blocks sort last); the overnight sleep block stays at the end
-    const key = b => b.dom === 'sleep' && t(b.e) < t(b.s) ? 1e4 : t(b.s) < DAY_START ? t(b.s) + 1440 : t(b.s);
+    const key = b => b.dom === 'sleep' && t(b.e) < t(b.s) ? 1e4 : t(b.s) < DAY_END_MAX ? t(b.s) + 1440 : t(b.s);
     arr.sort((a, b) => key(a) - key(b));
     const mk = u.sk === 'blocks' ? 'meals' : 'offMeals', meals = p.shifts[u.ss][mk];
     if (!del && meals && meals[nb.id]) meals[nb.id] = s;
@@ -2812,7 +2824,7 @@ const UI = {
   tg: null, blk: null, ics: null, imp: null, bannerHidden: false,
 };
 const TITLES = {
-  today: ['Today', () => fmtDate(UI.date || today())],
+  today: ['Today', () => fmtDate(UI.date || realToday())],
   train: ['Train', () => workoutFor(UI.trainDate || today()).name],
   eat: ['Eat', () => `${nutrition(UI.date || today()).p} g protein so far`],
   plan: ['Plan', () => `Shift ${weekShift(today())} this week`],
@@ -3176,6 +3188,11 @@ const ACTS = {
   gptApply: () => { if (!UI.gpt.merged) return; commitPlan(UI.gpt.merged); UI.gpt = { step: 1 }; },
 
   /* settings */
+  setDayEnd: el => {
+    const v = +el.dataset.v; if (!DAY_END_OPTS.includes(v)) return;
+    setS({ dayEnd: v }); UI.date = UI.trainDate = null; render();
+    toast(v ? `After midnight counts as the day before until ${hm(v)}` : 'New day starts at midnight', 'moon-star');
+  },
   toggleS: el => {
     const k = el.dataset.k, v = !S()[k];
     if (k === 'guide') setGuide(v); else setS({ [k]: v });
@@ -3421,7 +3438,7 @@ function openEntry(kind, date = today(), preset = {}) {
     UI.edit = {};
     body = `<div class="field"><label for="ed-text">Note</label><textarea id="ed-text" placeholder="Type a line…">${esc(preset.text || '')}</textarea></div>`;
   }
-  const sub = `${relDay(date)}${relDay(date) === 'Today' ? '' : ' · ' + fmtDate(date)}`;
+  const sub = date === today() ? dayLabel(date) : `${relDay(date)} · ${fmtDate(date)}`;
   openGen(e.title, sub, `${body}${e.hint ? GN(e.hint) : ''}
     <button class="btn primary block" style="margin-top:14px" data-act="entrySave">${I('check', 's')}Save</button>`, { date, kind });
   if (kind === 'food' || kind === 'note') setTimeout(() => { const t = $('#ed-text'); if (t && !t.value) t.focus(); }, 380);
@@ -3730,13 +3747,20 @@ async function boot() {
     DB.onExternal = () => { if (!sheetOpen()) render(); };
     DB.onError = msg => { renderBanner(); toast(msg, 'triangle-alert'); };
 
-    // the clock and the "now" marker move on their own
-    let lastDay = today();
-    setInterval(() => {
-      if (document.hidden) return;
-      if (today() !== lastDay) { lastDay = today(); maybeSnapshot(); if (!sheetOpen()) render(); return; }
-      if (!sheetOpen() && (UI.screen === 'today' || UI.screen === 'eat')) render();
-    }, 60000);
+    // the clock and the "now" marker move on their own. After a long gap (phone asleep, app in the
+    // background, page frozen) or a day change, a picked day is dropped so the app reopens on today.
+    const dayKey = () => today() + '|' + realToday();
+    let lastKey = dayKey(), lastTick = now();
+    const tick = resume => {
+      if (document.hidden || !DB.ready) return;
+      const key = dayKey(), changed = key !== lastKey, away = now() - lastTick > 15 * 60000;
+      lastKey = key; lastTick = now();
+      if (changed) maybeSnapshot();
+      if (changed || away) UI.date = UI.trainDate = UI.calMonth = UI.calYear = null;
+      if (sheetOpen()) return;
+      if (changed || away || resume || UI.screen === 'today' || UI.screen === 'eat') render();
+    };
+    setInterval(() => tick(false), 60000);
     setInterval(() => {
       const c = $('#clock'); if (!c || UI.screen !== 'train') return;
       const D = UI.trainDate || today();
@@ -3744,7 +3768,9 @@ async function boot() {
     }, 1000);
 
     const save = () => { try { flush(); } catch (_) {} };
-    document.addEventListener('visibilitychange', () => { if (document.hidden) save(); else if (DB.ready && !sheetOpen()) render(); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) save(); else tick(true); });
+    window.addEventListener('pageshow', e => { if (e.persisted) tick(true); });
+    window.addEventListener('focus', () => tick(true));
     window.addEventListener('pagehide', save);
     window.addEventListener('beforeunload', save);
 
