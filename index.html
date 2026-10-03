@@ -835,6 +835,7 @@ textarea.tall{min-height:240px;resize:vertical}
 <div class="toast" id="toast" role="status"><svg class="ico s"><use href="#i-circle-check"/></svg><span id="toastTxt"></span><button id="toastAct" hidden>Undo</button></div>
 
 <script>
+const NEW_PLAN_PROMPT = "Make me a personal daily routine plan for the Cadence app: my day timeline, workouts, meals and groceries.\n\nABOUT ME (fill in what applies, delete the rest):\n- Age, height, weight:\n- Goal: (lose fat / build muscle / both / get fitter / sleep better)\n- Work days and hours: (e.g. Mon–Fri 09:00–17:30)\n- Second shift, if my hours change some weeks: (e.g. 14:00–22:00 every other week; leave empty if my hours are fixed)\n- Commute, each way:\n- Wake-up and bedtime I'd like:\n- Training: home or gym, equipment, experience, days per week, minutes per session\n- Food: diet (veg / vegan / non-veg / halal ...), allergies, cuisine, foods I like or avoid, budget\n- Anything else: (injuries, health limits, kids, classes ...)\n- Start date:\n\nUse my details to set sensible daily targets (protein, calories, water, sleep), a realistic daily timeline for work days and days off, a 7-day workout week that progresses, meals with protein and calories, a few food swaps, a weekly grocery list, prep tasks and 5–9 simple rules.\n\nREPLY FORMAT (important: the app imports your reply directly)\nReply with ONLY one JSON object, no text before or after it and no comments inside it. Use exactly this structure; \"...\" means \"more of the same\":\n\n{\n  \"targets\": { \"protein\": [110, 130], \"kcal\": 2400, \"water\": 3, \"sleep\": 7.5 },\n  \"workdays\": [\"Mon\", \"Tue\", \"Wed\", \"Thu\", \"Fri\"],\n  \"shifts\": {\n    \"A\": {\n      \"name\": \"Shift A\", \"color\": \"water\",\n      \"meals\":    { \"bfast\": \"08:00\", \"lunch\": \"13:00\", \"snack\": \"16:30\", \"dinner\": \"20:00\" },\n      \"blocks\": [\n        { \"id\": \"wake\",  \"s\": \"07:00\", \"e\": \"07:10\", \"dom\": \"water\", \"icon\": \"sunrise\",  \"title\": \"Wake + 500 ml water\", \"sub\": \"Lights on\" },\n        { \"id\": \"train\", \"s\": \"07:10\", \"e\": \"07:50\", \"dom\": \"train\", \"icon\": \"dumbbell\", \"title\": \"{workout}\", \"sub\": \"{exercises}\", \"wk\": true },\n        { \"id\": \"bfast\", \"s\": \"08:00\", \"e\": \"08:20\", \"dom\": \"fuel\",  \"icon\": \"utensils\", \"title\": \"Breakfast\", \"sub\": \"Oats + yogurt · 31 g protein\" },\n        { \"id\": \"work\",  \"s\": \"09:00\", \"e\": \"17:30\", \"dom\": \"work\",  \"icon\": \"briefcase\", \"title\": \"Work\", \"sub\": \"Lunch 13:00 · snack 16:30\" },\n        { \"id\": \"mprep\", \"s\": \"20:30\", \"e\": \"21:00\", \"dom\": \"prep\",  \"icon\": \"cooking-pot\", \"title\": \"Mini-prep\", \"sub\": \"Overnight oats\", \"days\": [\"Wed\"] },\n        { \"id\": \"sleep\", \"s\": \"23:00\", \"e\": \"07:00\", \"dom\": \"sleep\", \"icon\": \"bed\", \"title\": \"Sleep\", \"sub\": \"8 h window\" },\n        ...\n      ],\n      \"offMeals\": { \"bfast\": \"09:00\", \"lunch\": \"13:30\", \"snack\": \"16:30\", \"dinner\": \"20:00\" },\n      \"offDay\": [ ...the timeline for days off, same block format... ]\n    },\n    \"B\": { ...same as \"A\" for my second shift, with \"name\": \"Shift B\" and \"color\": \"sleep\". If my hours are fixed, make \"B\" an exact copy of \"A\"... }\n  },\n  \"week\": [\n    { \"day\": \"Mon\", \"name\": \"Upper body\", \"dom\": \"train\", \"icon\": \"dumbbell\", \"ex\": [\n      { \"name\": \"Push-ups\", \"spec\": \"4 × 8–12\", \"sets\": 4, \"tip\": \"All sets at 12 → elevate your feet\" },\n      ...\n    ] },\n    ...7 entries in total, Mon to Sun...\n  ],\n  \"meals\": [\n    { \"id\": \"bfast\", \"name\": \"Breakfast\", \"icon\": \"egg\", \"items\": [[\"Oats 60 g + milk\", 13, 330], [\"Greek yogurt 200 g\", 18, 150]] },\n    ...\n  ],\n  \"swaps\": { \"Oats 60 g + milk\": [[\"Eggs ×3 on toast\", 22, 380], [\"Muesli + milk\", 12, 350]] },\n  \"grocery\": [ { \"cat\": \"Protein\", \"icon\": \"egg\", \"items\": [[\"Eggs\", \"18\"], [\"Greek yogurt\", \"1.5 kg\"]] }, ... ],\n  \"prep\": [ { \"day\": \"Sun\", \"title\": \"Meal prep · 1 h\", \"items\": [\"Cook rice for 3 lunches\", \"Overnight oats for 3 days\"] } ],\n  \"rules\": [\"Hit your protein every day.\", ...],\n  \"minimumKeep\": [\"wake\", \"bfast\", \"work\", \"dinner\", \"sleep\"],\n  \"equipment\": [\"Resistance band\", ...],\n  \"phases\": [ { \"name\": \"Phase 1 · Foundation\", \"icon\": \"house\", \"from\": \"2026-10-05\", \"to\": \"2026-11-29\", \"note\": \"8 weeks\" } ]\n}\n\nRules for the JSON:\n- Times are 24-hour \"HH:MM\". A block may cross midnight (sleep 23:00 → 07:00). Each timeline covers the whole day in time order, without overlaps.\n- Every block has id (short, lowercase), s (start), e (end), dom, icon, title and sub (one short line). Add \"days\": [\"Sat\"] for a block that happens only on some days; two blocks may share an id only when their \"days\" differ.\n- Each timeline (\"blocks\" and \"offDay\") has one workout block with \"wk\": true, \"title\": \"{workout}\" and \"sub\": \"{exercises}\"; the app fills in that day's workout.\n- A meal block uses the same id as its meal in \"meals\" (e.g. \"bfast\"). Every meal id needs a time in both \"meals\" and \"offMeals\" of both shifts.\n- Use dom \"work\" for the work block, \"commute\" for travel and \"sleep\" for sleep.\n- dom is one of: sleep, train, water, fuel, prep, mind, work, commute.\n- icon is one of: activity, alarm-clock, apple, backpack, bed, bell, brain, briefcase, calendar, car, carrot, chef-hat, clock, coffee, cooking-pot, droplet, dumbbell, egg, flame, footprints, heart-pulse, house, lightbulb, list-checks, milk, moon, notebook-pen, nut, ruler, salad, scale, shopping-basket, shower-head, smile, soup, sun, sunrise, target, timer, trophy, utensils, wheat, zap.\n- \"week\" has exactly 7 entries (Mon to Sun). Every day has at least one exercise; on a rest day use { \"name\": \"Full rest\", \"spec\": \"No training\", \"sets\": 1 }. \"sets\" is a whole number from 1 to 12; \"spec\" looks like \"3 × 10\", \"3 × 10 / leg\", \"3 × 30 s\" or \"20 min\".\n- Foods are [\"name with portion\", protein_g, kcal] with realistic numbers; one day's meals should add up to the targets.\n- \"workdays\" are the days I work; every other day uses \"offDay\".\n- Grocery amounts cover one week; \"minimumKeep\" lists the block ids to keep on a low-energy day.\n";
 /* ---- 01-util.js ---- */
 /* ===== Cadence · helpers (pure: no DOM at load, so tests can run this in node) ===== */
 const $ = (s, el = document) => el.querySelector(s);
@@ -981,14 +982,29 @@ function deepMerge(base, patch) {
   return out;
 }
 
+// chat replies sometimes carry // comments or trailing commas: drop them, leaving strings untouched
+function looseJson(s) {
+  let out = '', q = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) { out += c; if (c === '\\') out += s[++i] ?? ''; else if (c === '"') q = false; continue; }
+    if (c === '"') { q = true; out += c; continue; }
+    if (c === '/' && s[i + 1] === '/') { while (i < s.length && s[i] !== '\n') i++; out += '\n'; continue; }
+    if (c === '/' && s[i + 1] === '*') { const e = s.indexOf('*/', i + 2); i = e < 0 ? s.length : e + 1; continue; }
+    if (c === ',') { let k = i + 1; while (/\s/.test(s[k] || '')) k++; if (s[k] === '}' || s[k] === ']') continue; }
+    out += c;
+  }
+  return out;
+}
 // pulls the first JSON object out of text (handles ```json fences and chatty replies)
 function extractJson(text) {
   const s = String(text || '').trim(), fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
   const body = fence ? fence[1] : s;
-  try { return JSON.parse(body); } catch (_) {}
-  const i = body.indexOf('{'), j = body.lastIndexOf('}');
-  if (i >= 0 && j > i) return JSON.parse(body.slice(i, j + 1));
-  throw new Error('No JSON found in the reply');
+  const i = body.indexOf('{'), j = body.lastIndexOf('}'), obj = i >= 0 && j > i ? body.slice(i, j + 1) : '';
+  for (const t of [body, obj].filter(Boolean)) { try { return JSON.parse(t); } catch (_) {} }
+  if (!obj) throw new Error('No JSON found in the reply');
+  try { return JSON.parse(looseJson(obj)); } catch (_) {}
+  return JSON.parse(obj); // throws the parser's own message
 }
 
 /* ---- 02-store.js ---- */
@@ -1175,7 +1191,7 @@ async function mergeRecords(recs) {
 /* ----- settings ----- */
 const DEFAULT_SETTINGS = {
   pattern: 'alternate', anchor: '2026-10-05', anchorShift: 'A', rota: 'AAB',
-  nudges: true, bkRemind: true, bkKey: false, guide: false,
+  nudges: true, bkRemind: true, bkKey: false, guide: false, planTip: true,
   ai: false, aiUrl: '', aiModel: '', lastBackupAt: 0, created: 0,
 };
 const S = () => ({ ...DEFAULT_SETTINGS, ...val('set', 'main') });
@@ -1933,6 +1949,13 @@ function renderToday() {
       <div class="actions" style="margin-top:10px"><button class="btn sm" data-act="trainMode" data-v="min">${I('hourglass', 's')}Minimum session</button>
       <button class="btn sm" data-act="trainMode" data-v="recovery">${I('heart-pulse', 's')}Recovery walk</button></div></div>`;
   }
+  // still on the sample plan: point to the ChatGPT flow that makes one for this person
+  if (isToday && S().planTip && planRows().length <= 1) {
+    nudge += `<div class="card rise nudge d-train" style="--i:3"><div class="row"><span class="badge d-train">${I('wand-sparkles')}</span>
+      <div class="grow"><b>This is a sample plan</b><small>Get your own from ChatGPT for your hours, goal and food, then import it here.</small></div></div>
+      <div class="actions" style="margin-top:10px"><button class="btn sm primary" data-act="gptNew">${I('sparkles', 's')}Make my plan</button>
+      <button class="btn sm" data-act="planTipOff">Hide</button></div></div>`;
+  }
 
   $('#s-today').innerHTML = `
   <div class="head rise" style="--i:0"><div><h1>${esc(title)}</h1><p>${fmtDate(date)} · ${esc(shName)}${info.work ? ' · ' + workSpan(info) : ''}</p></div>
@@ -2291,6 +2314,7 @@ function renderPlan() {
     <button class="btn" data-act="planEdit">${I('sliders-horizontal', 's')}Edit plan</button>
     <button class="btn primary" data-act="gpt">${I('sparkles', 's')}Update from GPT</button>
   </div>
+  <button class="btn" style="width:100%;margin-top:8px" data-act="gptNew">${I('wand-sparkles', 's')}Make a new plan for me with ChatGPT</button>
   ${GN('<b>Changing the plan is a new version, never an overwrite.</b> Edit it by hand, or paste an updated plan from ChatGPT: Cadence shows a diff first. Days you already lived keep pointing at the version they were made under, so old charts stay honest.')}`;
   animateIn($('#s-plan'));
 }
@@ -2383,37 +2407,64 @@ Reply with ONE JSON object and nothing else. It must contain only the parts of t
 My current plan:
 ${JSON.stringify(latestPlan().data)}`;
 }
+
+/* ----- a whole new plan: NEW_PLAN_PROMPT (src/prompt.txt, also shared as prompt.txt) with the user's "about me" filled in ----- */
+const ABOUT_RE = /(ABOUT ME[^\n]*\n)([\s\S]*?)(\n\n)/;
+const aboutTemplate = () => (NEW_PLAN_PROMPT.match(ABOUT_RE) || ['', '', ''])[2].replace(/^- Start date:.*$/m, `- Start date: ${addDays(mondayOf(today()), 7)}`);
+const newPlanPrompt = about => NEW_PLAN_PROMPT.replace(ABOUT_RE, (_, head, _old, tail) => head + (String(about || '').trim() || aboutTemplate()) + tail);
+// a plan made from scratch replaces the old one: sections it lacks start empty instead of inheriting the sample plan's foods
+function fullPlan(p) {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return p;
+  const out = { swaps: {}, grocery: [], prep: [], rules: [], equipment: [], phases: [], ...clone(p) };
+  delete out.note;
+  if (!Array.isArray(out.minimumKeep)) out.minimumKeep = clone(DEFAULT_PLAN.minimumKeep);
+  const day = d => { const t = String(d || '').trim(); return t.slice(0, 1).toUpperCase() + t.slice(1, 3).toLowerCase(); }; // "monday" → "Mon"
+  if (Array.isArray(out.workdays)) out.workdays = out.workdays.map(day);
+  if (out.shifts && out.shifts.A && !out.shifts.B) out.shifts = { ...out.shifts, B: { ...clone(out.shifts.A), name: 'Shift B' } };
+  if (Array.isArray(out.week) && out.week.every(w => w && DOW.includes(day(w.day)))) out.week = out.week.map(w => ({ ...w, day: day(w.day) })).sort((a, b) => DOW.indexOf(a.day) - DOW.indexOf(b.day));
+  return out;
+}
+const gptText = () => (UI.gpt.mode === 'new' ? newPlanPrompt(UI.gpt.about) : gptPrompt(UI.gpt.req));
+const gptKeep = () => { const r = $('#gptReq'), a = $('#gptAbout'); if (r) UI.gpt.req = r.value; if (a) UI.gpt.about = a.value; };
+
 function renderGpt() {
-  const g = UI.gpt, s = S(), hasAi = s.ai && s.aiUrl && val('secret', 'ai').key;
+  const g = UI.gpt, s = S(), hasAi = s.ai && s.aiUrl && val('secret', 'ai').key, isNew = g.mode === 'new';
+  $('#sh-gpt h2').textContent = isNew ? 'New plan from ChatGPT' : 'Update plan from GPT';
   const steps = `<div class="steps">${['Copy prompt', 'Paste reply', 'Review'].map((x, i) => `<span class="${g.step === i + 1 ? 'on' : g.step > i + 1 ? 'done' : ''}"><b>${i + 1}</b>${x}</span>`).join('')}</div>`;
+  const next = hasAi ? `<button class="btn" data-act="gptAsk">${I('bot', 's')}Ask AI directly</button>` : `<button class="btn" data-act="gptNext">${I('chevron-right', 's')}I have a reply</button>`;
   let body = '';
   if (g.step === 1) body = `
+    <div class="seg" style="margin-bottom:12px">${[['adjust', 'Change my plan'], ['new', 'New plan for me']].map(([v, l]) => `<button data-act="gptMode" data-v="${v}" class="${(g.mode || 'adjust') === v ? 'on' : ''}">${l}</button>`).join('')}</div>` + (isNew ? `
+    <div class="field"><label for="gptAbout">About you</label><textarea id="gptAbout" class="tall">${esc(g.about ?? aboutTemplate())}</textarea><small class="muted">Fill in what applies and delete the rest. Your hours, goal and food decide the whole plan.</small></div>
+    <div class="grid2"><button class="btn primary" data-act="gptCopy">${I('copy', 's')}Copy prompt</button>${next}</div>
+    <p class="muted small" style="margin-top:10px">Paste the prompt into ChatGPT (or Gemini, Claude…). It answers with one plan in Cadence’s format: paste that reply here, or save it as a .json file and import it. You see every change before saving, and your current plan stays in history.</p>` : `
     <div class="field"><label for="gptReq">What should change?</label><textarea id="gptReq" placeholder="e.g. Move Shift B dinner earlier, add a Thursday walk, more protein at breakfast">${esc(g.req || '')}</textarea></div>
-    <div class="grid2"><button class="btn primary" data-act="gptCopy">${I('copy', 's')}Copy prompt</button>${hasAi ? `<button class="btn" data-act="gptAsk">${I('bot', 's')}Ask AI directly</button>` : `<button class="btn" data-act="gptNext">${I('chevron-right', 's')}I have a reply</button>`}</div>
-    ${GN('The prompt includes your current plan and a short summary of the last weeks. Paste it into ChatGPT (or any assistant), then come back with its reply.' + (hasAi ? '' : ' To skip copy-paste, add an AI service in Settings.'))}`;
+    <div class="grid2"><button class="btn primary" data-act="gptCopy">${I('copy', 's')}Copy prompt</button>${next}</div>
+    ${GN('The prompt includes your current plan and a short summary of the last weeks. Paste it into ChatGPT (or any assistant), then come back with its reply.' + (hasAi ? '' : ' To skip copy-paste, add an AI service in Settings.'))}`);
   if (g.step === 2) body = `
     <div class="field"><label for="gptReply">Paste the reply</label><textarea id="gptReply" class="code tall" spellcheck="false" placeholder="Paste the whole reply; Cadence finds the JSON in it">${esc(g.reply || '')}</textarea></div>
-    <div class="grid2"><button class="btn" data-act="gptBack">${I('chevron-left', 's')}Back</button><button class="btn primary" data-act="gptReview">${I('file-check', 's')}Review changes</button></div>`;
-  if (g.step === 3) body = `<div id="gptCheck"></div><button class="btn ghost" style="width:100%;margin-top:8px" data-act="gptBack">${I('chevron-left', 's')}Back to the reply</button>`;
+    <div class="grid2"><button class="btn" data-act="gptBack">${I('chevron-left', 's')}Back</button><button class="btn primary" data-act="gptReview">${I('file-check', 's')}Review changes</button></div>
+    ${isNew ? `<button class="btn ghost" style="width:100%;margin-top:8px" data-act="gptFile">${I('upload', 's')}Or import a .json file</button>` : ''}`;
+  if (g.step === 3) body = `<div id="gptCheck"></div>${isNew ? `<p class="muted small" style="margin-top:10px">Same hours every week? After saving, set Settings → Shift pattern to <b>Always A</b>.</p>` : ''}<button class="btn ghost" style="width:100%;margin-top:8px" data-act="gptBack">${I('chevron-left', 's')}Back to the reply</button>`;
   $('#gptBody').innerHTML = steps + body;
   if (g.step === 3) {
     const box = $('#gptCheck');
     try {
       const obj = extractJson(g.reply), patch = obj && obj.plan && typeof obj.plan === 'object' ? obj.plan : obj;
-      const note = String(obj.note || patch.note || 'Update from GPT').slice(0, 120);
-      const merged = deepMerge(latestPlan().data, patch); delete merged.note;
+      const note = String(obj.note || patch.note || (isNew ? 'New plan from ChatGPT' : 'Update from GPT')).slice(0, 120);
+      const merged = isNew ? fullPlan(patch) : deepMerge(latestPlan().data, patch); delete merged.note;
       g.merged = merged;
       showPlanReview(box, merged, note, 'gptApply');
     } catch (e) { box.innerHTML = `<div class="errs">${I('triangle-alert', 's')}${esc(e.message)}. Check that the reply contains a JSON object.</div>`; }
   }
 }
 async function askAi() {
-  const s = S(), key = val('secret', 'ai').key, req = $('#gptReq')?.value || '';
-  UI.gpt.req = req;
+  const s = S(), key = val('secret', 'ai').key;
+  gptKeep();
   const url = s.aiUrl.replace(/\/+$/, '') + '/chat/completions';
   toast('Asking the AI…', 'bot');
   try {
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify({ model: s.aiModel || 'gpt-4o-mini', messages: [{ role: 'user', content: gptPrompt(req) }] }) });
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify({ model: s.aiModel || 'gpt-4o-mini', messages: [{ role: 'user', content: gptText() }] }) });
     if (!r.ok) throw new Error(`The service answered ${r.status}`);
     const j = await r.json(), text = j.choices?.[0]?.message?.content || j.output_text || '';
     if (!text) throw new Error('Empty reply');
@@ -2575,6 +2626,11 @@ function renderSettings() {
   $('#s-settings').innerHTML = `
   <div class="head rise" style="--i:0"><div><h1>Settings</h1><p>Everything stays on this device.</p></div></div>
 
+  <div class="set-group rise" style="--i:1"><h3>Your plan</h3><div class="card flush">
+    ${setRow('wand-sparkles', 'train', 'Make a plan for me', 'ChatGPT builds one for your hours, goal and food', '', 'data-act="gptNew"')}
+    ${setRow('file-json', 'prep', 'Import a plan file', 'A .json plan from ChatGPT or a friend', `<button class="btn sm" data-act="restore">${I('upload', 's')}Import</button>`)}
+  </div></div>
+
   <div class="set-group rise" style="--i:1"><h3>Shift pattern</h3><div class="card">
     <div class="seg">${[['alternate', 'Alternate'], ['fixedA', 'Always A'], ['fixedB', 'Always B'], ['custom', 'Custom']].map(([v, l]) => `<button data-act="setPattern" data-v="${v}" class="${s.pattern === v ? 'on' : ''}">${l}</button>`).join('')}</div>
     ${s.pattern === 'alternate' ? `<div class="field"><label>This week (W${isoWeekOf(td).week}) is</label><div class="seg">${['A', 'B'].map(k => `<button data-act="anchorShift" data-v="${k}" class="${patternShift(td) === k ? 'on' : ''}">Shift ${k}</button>`).join('')}</div></div>` : ''}
@@ -2602,7 +2658,7 @@ function renderSettings() {
   <div class="set-group rise" style="--i:5"><h3>Data</h3><div class="card flush">
     ${setRow('shield-check', 'fuel', 'Storage', `<span id="stoInfo">${esc({ indexeddb: 'IndexedDB', localstorage: 'Browser storage (small)', memory: 'Not saved: storage is blocked' }[DB.engine] || DB.engine)}</span>`, '')}
     ${setRow('database', 'water', 'Back up everything', `Plan, every version, all logs, settings · last ${esc(lastBk)}`, `<button class="btn sm" data-act="backup">${I('download', 's')}Back up</button>`)}
-    ${setRow('upload', 'prep', 'Restore from backup', 'Preview first, then merge or replace', `<button class="btn sm" data-act="restore">${I('upload', 's')}Import</button>`)}
+    ${setRow('upload', 'prep', 'Restore from backup', 'A backup or a plan file · preview first', `<button class="btn sm" data-act="restore">${I('upload', 's')}Import</button>`)}
     ${setRow('bell', 'mind', 'Weekly backup reminder', 'A banner when the last backup is over 7 days old', swS('bkRemind', 'Weekly backup reminder'))}
     ${setRow('history', 'mind', 'Weekly snapshots', 'One copy a week kept inside the app, last 8', '', 'data-act="snapshots"')}
     ${setRow('undo-2', 'ink-3', 'Undo last import', 'Puts back the data from just before it', '', 'data-act="undoImport"')}
@@ -3085,9 +3141,13 @@ const ACTS = {
     commitPlan(p);
   },
   gpt: () => { UI.gpt = { step: 1 }; renderGpt(); openSheet('sh-gpt'); },
+  gptNew: () => { UI.gpt = { step: 1, mode: 'new' }; renderGpt(); openSheet('sh-gpt'); },
+  gptMode: el => { gptKeep(); UI.gpt.mode = el.dataset.v; renderGpt(); },
+  gptFile: () => { const f = $('#fileIn'); f.value = ''; f.click(); },
+  planTipOff: () => { setS({ planTip: false }); render(); },
   gptCopy: async () => {
-    const req = $('#gptReq')?.value || ''; UI.gpt.req = req;
-    const text = gptPrompt(req);
+    gptKeep();
+    const text = gptText();
     if (await copyText(text)) { toast('Prompt copied. Paste it into ChatGPT', 'copy'); UI.gpt.step = 2; renderGpt(); }
     else {
       toast('Couldn’t copy automatically. Select the text below', 'triangle-alert');
@@ -3095,7 +3155,7 @@ const ACTS = {
     }
   },
   gptAsk: () => askAi(),
-  gptNext: () => { const r = $('#gptReq'); if (r) UI.gpt.req = r.value; UI.gpt.step = 2; renderGpt(); },
+  gptNext: () => { gptKeep(); UI.gpt.step = 2; renderGpt(); },
   gptBack: () => { const r = $('#gptReply'); if (r) UI.gpt.reply = r.value; UI.gpt.step = Math.max(1, UI.gpt.step - 1); renderGpt(); },
   gptReview: () => {
     UI.gpt.reply = $('#gptReply')?.value || '';
@@ -3449,10 +3509,11 @@ function readImportFile(file) {
   r.onload = () => {
     try {
       const text = String(r.result || '');
-      // a plan file (e.g. one exported from Plan → versions) goes to the plan review, not the backup import
-      let j = null; try { j = JSON.parse(text); } catch (_) {}
+      // a plan file (exported from Plan → versions, or a ChatGPT reply saved as .json) goes to the plan review, not the backup import
+      let j = null; try { j = extractJson(text); } catch (_) {}
+      if (j && j.plan && j.plan.shifts) j = j.plan;
       if (j && j.shifts && Array.isArray(j.week)) {
-        closeSheets(); openPlanEditor(JSON.stringify(j, null, 2)); checkPlanText();
+        closeSheets(); openPlanEditor(JSON.stringify(fullPlan(j), null, 2)); checkPlanText();
         const note = $('#planNote'); if (note) note.value = 'Imported ' + file.name.slice(0, 80);
         return;
       }
@@ -3729,6 +3790,22 @@ async function smoke() {
     () => { UI.imp = { v: parseBackupText(JSON.stringify(buildBackup())), mode: 'merge', name: 'smoke.json', size: 1 }; renderImport(); openSheet('sh-import'); },
     () => readImportFile(new File([JSON.stringify({ ...DEFAULT_PLAN, targets: { ...DEFAULT_PLAN.targets, kcal: 2300 } })], 'plan.json')),
     () => { if (!/Save as v/.test($('#planCheck')?.innerHTML || '')) throw new Error('plan file did not open the plan review'); },
+    // new plan from ChatGPT: the about text lands in the prompt, and a chatty reply (one shift, long day names, a comment) still reviews
+    () => {
+      closeSheets(); UI.gpt = { step: 1, mode: 'new' }; renderGpt(); openSheet('sh-gpt');
+      if (!$('#gptAbout')) throw new Error('new-plan mode has no about field');
+      const t = newPlanPrompt('- Goal: smoke');
+      if (!t.includes('- Goal: smoke') || t.includes('- Age, height, weight:') || !t.includes('REPLY FORMAT')) throw new Error('new-plan prompt did not take the about text');
+    },
+    () => {
+      const p = clone(DEFAULT_PLAN); delete p.shifts.B; for (const k of ['prep', 'phases', 'swaps', 'grocery', 'equipment']) delete p[k];
+      p.workdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']; p.week = p.week.slice().reverse(); p.targets.kcal = 2100;
+      const json = JSON.stringify(p, null, 2).replace('"kcal": 2100,', '"kcal": 2100, // for your goal').replace(/\n}$/, ',\n}');
+      UI.gpt.reply = 'Here is your plan:\n```json\n' + json + '\n```\nEnjoy!'; UI.gpt.step = 3; renderGpt();
+      if (!/Save as v/.test($('#gptCheck')?.innerHTML || '')) throw new Error('new-plan reply did not reach the review: ' + ($('#gptCheck')?.textContent || '').slice(0, 160));
+      const m = UI.gpt.merged;
+      if (m.prep.length || m.shifts.B.name !== 'Shift B' || m.week[0].day !== 'Mon' || m.workdays[0] !== 'Mon' || m.targets.kcal !== 2100) throw new Error('the new plan was not normalised');
+    },
     () => { closeSheets(); go('today'); },
   ];
   // nothing on a screen may stick out sideways (that would make the whole page scroll horizontally on a phone)
